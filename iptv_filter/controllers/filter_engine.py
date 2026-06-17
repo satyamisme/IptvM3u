@@ -32,43 +32,95 @@ class FilterEngine:
     def get_country_counts(self) -> Dict[str, int]:
         return {country: len(ids) for country, ids in self.channels_by_country.items()}
 
+    def get_statistics(self) -> dict:
+        total = len(self.channels)
+        filtered = len(self.filtered_channels)
+
+        # Get top 5 langs
+        lang_counts = [(l, len(ids)) for l, ids in self.channels_by_language.items()]
+        lang_counts.sort(key=lambda x: x[1], reverse=True)
+        top_langs = lang_counts[:5]
+
+        # Get top 5 categories
+        cat_counts = [(c, len(ids)) for c, ids in self.channels_by_category.items()]
+        cat_counts.sort(key=lambda x: x[1], reverse=True)
+        top_cats = cat_counts[:5]
+
+        # Detect duplicates among filtered channels (by ID and streams)
+        seen_urls = set()
+        duplicate_count = 0
+        for ch in self.filtered_channels:
+            if ch.streams:
+                url = ch.streams[0].get("url")
+                if url in seen_urls:
+                    duplicate_count += 1
+                else:
+                    seen_urls.add(url)
+
+        return {
+            "total": total,
+            "filtered": filtered,
+            "top_languages": top_langs,
+            "top_categories": top_cats,
+            "duplicates_in_filtered": duplicate_count
+        }
+
+    def remove_duplicates(self) -> int:
+        """Removes duplicate channels from self.filtered_channels based on first stream URL."""
+        seen_urls = set()
+        unique_channels = []
+        removed_count = 0
+        for ch in self.filtered_channels:
+            if ch.streams:
+                url = ch.streams[0].get("url")
+                if url in seen_urls:
+                    removed_count += 1
+                    continue
+                seen_urls.add(url)
+            unique_channels.append(ch)
+
+        self.filtered_channels = unique_channels
+        return removed_count
+
     def apply_filters(self,
                       search_term: str = "",
                       languages: List[str] = None,
                       categories: List[str] = None,
                       countries: List[str] = None,
                       nsfw: bool = False,
-                      exclude_closed: bool = True) -> List[Channel]:
+                      exclude_closed: bool = True,
+                      favorites_only: bool = False,
+                      favorites_set: Set[str] = None) -> List[Channel]:
 
         result_ids = {ch.id for ch in self.channels}
 
-        # If languages are selected, channel must have AT LEAST ONE of the selected languages
         if languages:
             lang_ids = set()
             for lang in languages:
                 lang_ids.update(self.channels_by_language.get(lang, set()))
             result_ids.intersection_update(lang_ids)
 
-        # Same for categories
         if categories:
             cat_ids = set()
             for cat in categories:
                 cat_ids.update(self.channels_by_category.get(cat, set()))
             result_ids.intersection_update(cat_ids)
 
-        # Same for countries
         if countries:
             country_ids = set()
             for country in countries:
                 country_ids.update(self.channels_by_country.get(country, set()))
             result_ids.intersection_update(country_ids)
 
-        # Apply search, nsfw, exclude_closed manually
         filtered = []
         search_term = search_term.lower() if search_term else ""
+        favs = favorites_set or set()
 
         for ch in self.channels:
             if ch.id not in result_ids:
+                continue
+
+            if favorites_only and ch.id not in favs:
                 continue
 
             if exclude_closed and ch.closed:
