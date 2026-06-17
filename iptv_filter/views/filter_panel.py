@@ -60,11 +60,9 @@ class FilterPanel(ttk.Frame):
         ttk.Checkbutton(lf_opts, text="Favorites Only", variable=self.favs_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
         ttk.Checkbutton(lf_opts, text="Working Only", variable=self.working_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5, pady=(0, 5))
 
-        # Enhanced Language Treeview
         lf_lang = ttk.LabelFrame(f, text="Languages")
         lf_lang.pack(fill=tk.X, padx=5, pady=5)
 
-        # We'll use a treeview to show groups and languages
         self.lang_tree = ttk.Treeview(lf_lang, selectmode="extended", show="tree", height=6)
         lang_scroll = ttk.Scrollbar(lf_lang, orient="vertical", command=self.lang_tree.yview)
         self.lang_tree.configure(yscrollcommand=lang_scroll.set)
@@ -82,6 +80,7 @@ class FilterPanel(ttk.Frame):
 
         ttk.Button(lf_actions, text="Check All Streams", command=self.controller.check_all_streams).pack(fill=tk.X, pady=2)
         ttk.Button(lf_actions, text="Remove Duplicates", command=self.controller.remove_duplicates).pack(fill=tk.X, pady=2)
+        ttk.Button(lf_actions, text="Remove Dead Streams", command=self.controller.remove_dead_streams).pack(fill=tk.X, pady=2)
         ttk.Button(lf_actions, text="Clear Filters", command=self.clear_filters).pack(fill=tk.X, pady=2)
         ttk.Button(lf_actions, text="Show Statistics", command=self.controller.show_statistics).pack(fill=tk.X, pady=2)
 
@@ -94,13 +93,10 @@ class FilterPanel(ttk.Frame):
         return lb
 
     def populate_lists(self, languages: List[str], categories: List[str], countries_counts: Dict[str, int]):
-        # Populate languages into tree
         self.lang_tree.delete(*self.lang_tree.get_children())
 
-        # Group them
         groups = {}
         for display_name in languages:
-            # We need the code to get the group
             code = self.controller.data_processor.language_code_map.get(display_name, display_name)
             group_name = get_language_group(code)
             groups.setdefault(group_name, []).append(display_name)
@@ -147,7 +143,6 @@ class FilterPanel(ttk.Frame):
         self.working_only_var.set(data.get("working_only", False))
         self.search_var.set(data.get("search_term", ""))
 
-        # Restoring tree selection can be complex if node is closed, we do basic selection
         langs = data.get("languages", [])
         to_select = []
         for item in self.lang_tree.get_children():
@@ -178,20 +173,17 @@ class FilterPanel(ttk.Frame):
         selected_countries_display = self.get_selected_items(self.country_listbox)
         selected_countries = [self.countries_mapping[d] for d in selected_countries_display if d in self.countries_mapping]
 
-        # Gather languages from tree
         selected_langs = []
         for item in self.lang_tree.selection():
             vals = self.lang_tree.item(item, "values")
             if vals:
                 selected_langs.append(vals[0])
             else:
-                # If a group is selected, select all its children
                 for child in self.lang_tree.get_children(item):
                     child_vals = self.lang_tree.item(child, "values")
                     if child_vals:
                         selected_langs.append(child_vals[0])
 
-        # Remove duplicates from group selecting
         selected_langs = list(set(selected_langs))
 
         return {

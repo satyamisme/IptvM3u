@@ -94,12 +94,21 @@ class AppController:
         else:
             self.window.show_info("Duplicates", "No duplicates found in current view.")
 
+    def remove_dead_streams(self):
+        count = self.filter_engine.remove_dead_streams()
+        if count > 0:
+            self.window.show_info("Dead Streams Removed", f"Removed {count} dead streams permanently from the view.")
+            self._update_tree(self.filter_engine.filtered_channels)
+        else:
+            self.window.show_info("No Dead Streams", "No streams marked as Dead found in current view. (Have you run 'Check All Streams'?)")
+
     def show_statistics(self):
         stats = self.filter_engine.get_statistics()
         msg = f"Total Channels Loaded: {stats['total']}\n"
         msg += f"Currently Filtered: {stats['filtered']}\n"
         msg += f"Duplicates Detected: {stats['duplicates_in_filtered']}\n"
         msg += f"Working Streams: {stats['working_count']}\n"
+        msg += f"Geo-blocked Streams: {stats['geo_count']}\n"
         msg += f"Dead Streams: {stats['dead_count']}\n\n"
 
         msg += "Top Languages:\n"
@@ -199,21 +208,30 @@ class AppController:
 
     def update_current_playlist(self):
         if not self.filter_engine.filtered_channels:
-            self.window.show_info("Update", "No channels to export.")
+            self.window.show_info("Update", "No channels to update.")
             return
 
         last_file = self.prefs.get_setting("last_loaded_file", "")
         if not last_file:
-            self.window.show_info("Update Playlist", "No local file was loaded recently. Use Export M3U instead.")
+            self.window.show_info("Update Playlist", "No local file was loaded recently. Use Export As... instead.")
             return
 
-        if self.window.ask_yes_no("Update Playlist", f"Overwrite {last_file} with current filtered list?"):
-            self._do_export(last_file)
+        # Give user options to Overwrite or Append
+        append = self.window.ask_yes_no("Update Playlist", f"Do you want to APPEND to {last_file}?\n(Click 'No' to Overwrite instead)")
 
-    def _do_export(self, filepath: str):
+        self._do_export(last_file, append=append)
+
+    def _do_export(self, filepath: str, append: bool = False):
         try:
-            self.window.status_bar.start_indeterminate(f"Exporting M3U to {filepath}...")
-            ExportManager.export_m3u(filepath, self.filter_engine.filtered_channels)
+            self.window.status_bar.start_indeterminate(f"Exporting to {filepath}...")
+
+            if filepath.endswith(".json"):
+                ExportManager.export_json(filepath, self.filter_engine.filtered_channels)
+            elif filepath.endswith(".csv"):
+                ExportManager.export_csv(filepath, self.filter_engine.filtered_channels)
+            else:
+                ExportManager.export_m3u(filepath, self.filter_engine.filtered_channels, append=append)
+
             self.window.status_bar.stop_progress("Export successful.")
             self.window.show_info("Export Success", f"Playlist saved to {filepath}")
         except Exception as e:

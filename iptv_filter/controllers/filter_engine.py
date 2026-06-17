@@ -48,12 +48,15 @@ class FilterEngine:
         duplicate_count = 0
         working_count = 0
         dead_count = 0
+        geo_count = 0
 
         for ch in self.filtered_channels:
             if ch.status_text == "Working" or ch.status_text == "Slow":
                 working_count += 1
             elif ch.status_text == "Dead":
                 dead_count += 1
+            elif ch.status_text == "Geo-blocked":
+                geo_count += 1
 
             if ch.streams:
                 url = ch.streams[0].get("url")
@@ -69,7 +72,8 @@ class FilterEngine:
             "top_categories": top_cats,
             "duplicates_in_filtered": duplicate_count,
             "working_count": working_count,
-            "dead_count": dead_count
+            "dead_count": dead_count,
+            "geo_count": geo_count
         }
 
     def remove_duplicates(self) -> int:
@@ -86,6 +90,18 @@ class FilterEngine:
             unique_channels.append(ch)
 
         self.filtered_channels = unique_channels
+        return removed_count
+
+    def remove_dead_streams(self) -> int:
+        alive_channels = []
+        removed_count = 0
+        for ch in self.filtered_channels:
+            if ch.status_text == "Dead":
+                removed_count += 1
+                continue
+            alive_channels.append(ch)
+
+        self.filtered_channels = alive_channels
         return removed_count
 
     def apply_filters(self,
