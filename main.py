@@ -3,6 +3,7 @@ import threading
 import webbrowser
 from tkinter import messagebox
 import tkinter as tk
+import customtkinter as ctk
 
 from iptv_filter.views.main_window import MainWindow
 from iptv_filter.controllers.api_client import ApiClient
@@ -12,6 +13,7 @@ from iptv_filter.controllers.filter_engine import FilterEngine
 from iptv_filter.controllers.export_manager import ExportManager
 from iptv_filter.controllers.preferences_manager import PreferencesManager
 from iptv_filter.utils.stream_checker import StreamChecker
+from iptv_filter.views.statistics_dashboard import StatisticsDashboard
 
 class AppController:
     def __init__(self):
@@ -22,7 +24,7 @@ class AppController:
         self.filter_engine = FilterEngine()
 
         self.window = MainWindow(self)
-        self.apply_theme(self.prefs.get_setting("theme", "light"))
+        self.apply_theme(self.prefs.get_setting("theme", "dark"))
 
         self.window.after(100, self.load_data)
 
@@ -30,19 +32,16 @@ class AppController:
         self.window.mainloop()
 
     def toggle_theme(self):
-        current = self.prefs.get_setting("theme", "light")
-        new_theme = "dark" if current == "light" else "light"
+        current = self.prefs.get_setting("theme", "dark")
+        new_theme = "light" if current == "dark" else "dark"
         self.prefs.set_setting("theme", new_theme)
         self.apply_theme(new_theme)
 
     def apply_theme(self, theme_name: str):
-        bg = "#1E1E1E" if theme_name == "dark" else "#FFFFFF"
-        fg = "#E0E0E0" if theme_name == "dark" else "#212121"
-        try:
-            self.window.tk.call("tk", "windowingsystem")
-            self.window.configure(bg=bg)
-        except:
-            pass
+        if theme_name == "dark":
+            ctk.set_appearance_mode("dark")
+        else:
+            ctk.set_appearance_mode("light")
 
     def toggle_favorite(self, channel_id: str) -> bool:
         return self.prefs.toggle_favorite(channel_id)
@@ -64,6 +63,8 @@ class AppController:
             self.window.show_info("Check Streams", "No channels to check.")
             return
 
+        self.window.status_bar.start_indeterminate("Initializing stream check...")
+
         def on_progress(current, total):
             self.window.after(0, self.window.status_bar.update_progress, current, total, f"Checking streams: {current}/{total}")
 
@@ -71,7 +72,6 @@ class AppController:
             self.window.after(0, self.window.status_bar.stop_progress, "Stream checking complete.")
             self.window.after(0, self.window.filter_panel._trigger_filter)
 
-        self.window.status_bar.start_indeterminate("Initializing stream check...")
         StreamChecker.check_channels(self.filter_engine.filtered_channels, on_progress, on_done)
 
     def save_preset(self, name: str, filters: dict):
@@ -104,22 +104,7 @@ class AppController:
 
     def show_statistics(self):
         stats = self.filter_engine.get_statistics()
-        msg = f"Total Channels Loaded: {stats['total']}\n"
-        msg += f"Currently Filtered: {stats['filtered']}\n"
-        msg += f"Duplicates Detected: {stats['duplicates_in_filtered']}\n"
-        msg += f"Working Streams: {stats['working_count']}\n"
-        msg += f"Geo-blocked Streams: {stats['geo_count']}\n"
-        msg += f"Dead Streams: {stats['dead_count']}\n\n"
-
-        msg += "Top Languages:\n"
-        for l, c in stats['top_languages']:
-            msg += f"  - {l}: {c}\n"
-
-        msg += "\nTop Categories:\n"
-        for c, count in stats['top_categories']:
-            msg += f"  - {c}: {count}\n"
-
-        self.window.show_info("Channel Statistics", msg)
+        StatisticsDashboard(self.window, stats)
 
     def load_data(self):
         self.window.status_bar.start_indeterminate("Fetching and processing API data...")
@@ -216,7 +201,6 @@ class AppController:
             self.window.show_info("Update Playlist", "No local file was loaded recently. Use Export As... instead.")
             return
 
-        # Give user options to Overwrite or Append
         append = self.window.ask_yes_no("Update Playlist", f"Do you want to APPEND to {last_file}?\n(Click 'No' to Overwrite instead)")
 
         self._do_export(last_file, append=append)

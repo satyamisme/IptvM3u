@@ -1,94 +1,103 @@
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk, simpledialog, messagebox
+from tkinter import ttk, simpledialog
 from typing import List, Callable, Dict
 from iptv_filter.utils.language_groups import get_language_group
 
-class FilterPanel(ttk.Frame):
+class FilterPanel(ctk.CTkFrame):
     def __init__(self, parent, controller):
-        super().__init__(parent)
+        super().__init__(parent, width=300, corner_radius=12, fg_color=("gray90", "#1e2024"))
         self.controller = controller
+
+        # Prevent shrinking
+        self.grid_propagate(False)
+        self.pack_propagate(False)
 
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *args: self._trigger_filter())
 
-        self.nsfw_var = tk.BooleanVar(value=False)
-        self.closed_var = tk.BooleanVar(value=True)
-        self.favs_only_var = tk.BooleanVar(value=False)
-        self.working_only_var = tk.BooleanVar(value=False)
+        self.nsfw_var = ctk.BooleanVar(value=False)
+        self.closed_var = ctk.BooleanVar(value=True)
+        self.favs_only_var = ctk.BooleanVar(value=False)
+        self.working_only_var = ctk.BooleanVar(value=False)
 
         self.countries_mapping = {}
 
         self._setup_ui()
 
     def _setup_ui(self):
-        self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
-        self.scrollable_frame = ttk.Frame(self.canvas)
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", padx=15, pady=(15, 10))
+        ctk.CTkLabel(header, text="Filters", font=("Inter", 16, "bold")).pack(side="left")
 
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        # Scrollable area
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll.pack(fill="both", expand=True, padx=5, pady=5)
 
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        f = self.scroll
 
-        f = self.scrollable_frame
+        # Search
+        search_frame = ctk.CTkFrame(f, fg_color="transparent")
+        search_frame.pack(fill="x", padx=5, pady=5)
+        self.search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, placeholder_text="Search streams...", corner_radius=8)
+        self.search_entry.pack(fill="x")
 
-        lf_presets = ttk.LabelFrame(f, text="Presets")
-        lf_presets.pack(fill=tk.X, padx=5, pady=5)
+        # Actions
+        actions_frame = ctk.CTkFrame(f, corner_radius=8, fg_color=("gray85", "#282a2e"))
+        actions_frame.pack(fill="x", padx=5, pady=(10, 5))
 
-        self.preset_combo = ttk.Combobox(lf_presets, state="readonly")
-        self.preset_combo.pack(fill=tk.X, padx=5, pady=5)
-        self.preset_combo.bind("<<ComboboxSelected>>", self._on_preset_selected)
+        ctk.CTkButton(actions_frame, text="Check Streams", command=self.controller.check_all_streams, fg_color="#005ac2", height=28).pack(fill="x", padx=10, pady=(10, 5))
+        ctk.CTkButton(actions_frame, text="Clear Filters", command=self.clear_filters, fg_color="#333539", hover_color="#424754", height=28).pack(fill="x", padx=10, pady=5)
+        ctk.CTkButton(actions_frame, text="Show Statistics", command=self.controller.show_statistics, fg_color="#333539", hover_color="#424754", height=28).pack(fill="x", padx=10, pady=(5, 10))
 
-        btn_frame = ttk.Frame(lf_presets)
-        btn_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
-        ttk.Button(btn_frame, text="Save Current", command=self._save_preset).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
-        ttk.Button(btn_frame, text="Load", command=self._on_preset_selected).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
+        # Options
+        opts_frame = ctk.CTkFrame(f, fg_color="transparent")
+        opts_frame.pack(fill="x", padx=5, pady=10)
 
-        lf_opts = ttk.LabelFrame(f, text="Options")
-        lf_opts.pack(fill=tk.X, padx=5, pady=5)
+        ctk.CTkCheckBox(opts_frame, text="Working Only", variable=self.working_only_var, command=self._trigger_filter, text_color="#e2e2e8").pack(anchor="w", pady=4)
+        ctk.CTkCheckBox(opts_frame, text="Favorites Only", variable=self.favs_only_var, command=self._trigger_filter, text_color="#e2e2e8").pack(anchor="w", pady=4)
+        ctk.CTkCheckBox(opts_frame, text="Exclude Closed", variable=self.closed_var, command=self._trigger_filter, text_color="#e2e2e8").pack(anchor="w", pady=4)
+        ctk.CTkCheckBox(opts_frame, text="Include NSFW", variable=self.nsfw_var, command=self._trigger_filter, text_color="#e2e2e8").pack(anchor="w", pady=4)
 
-        ttk.Label(lf_opts, text="Search:").pack(anchor=tk.W, padx=5)
-        ttk.Entry(lf_opts, textvariable=self.search_var).pack(fill=tk.X, padx=5, pady=(0, 5))
+        # Presets
+        presets_frame = ctk.CTkFrame(f, corner_radius=8, fg_color=("gray85", "#282a2e"))
+        presets_frame.pack(fill="x", padx=5, pady=10)
+        ctk.CTkLabel(presets_frame, text="Presets", font=("Inter", 12, "bold")).pack(anchor="w", padx=10, pady=(10,0))
 
-        ttk.Checkbutton(lf_opts, text="Show NSFW", variable=self.nsfw_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
-        ttk.Checkbutton(lf_opts, text="Exclude Closed", variable=self.closed_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
-        ttk.Checkbutton(lf_opts, text="Favorites Only", variable=self.favs_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
-        ttk.Checkbutton(lf_opts, text="Working Only", variable=self.working_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5, pady=(0, 5))
+        self.preset_combo = ctk.CTkComboBox(presets_frame, state="readonly", command=self._on_preset_selected)
+        self.preset_combo.pack(fill="x", padx=10, pady=5)
 
-        lf_lang = ttk.LabelFrame(f, text="Languages")
-        lf_lang.pack(fill=tk.X, padx=5, pady=5)
+        btn_frame = ctk.CTkFrame(presets_frame, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+        ctk.CTkButton(btn_frame, text="Save", command=self._save_preset, width=60, height=24, fg_color="#333539", hover_color="#424754").pack(side="left", expand=True, fill="x", padx=(0,2))
 
-        self.lang_tree = ttk.Treeview(lf_lang, selectmode="extended", show="tree", height=6)
-        lang_scroll = ttk.Scrollbar(lf_lang, orient="vertical", command=self.lang_tree.yview)
+        # Languages Tree
+        lang_lbl = ctk.CTkLabel(f, text="Languages", font=("Inter", 12, "bold"))
+        lang_lbl.pack(anchor="w", padx=10, pady=(10, 0))
+
+        lang_frame = ctk.CTkFrame(f, corner_radius=8, fg_color=("gray85", "#282a2e"))
+        lang_frame.pack(fill="x", padx=5, pady=5)
+
+        self.lang_tree = ttk.Treeview(lang_frame, selectmode="extended", show="tree", height=6)
+        lang_scroll = ttk.Scrollbar(lang_frame, orient="vertical", command=self.lang_tree.yview)
         self.lang_tree.configure(yscrollcommand=lang_scroll.set)
 
-        self.lang_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5,0), pady=5)
-        lang_scroll.pack(side=tk.RIGHT, fill=tk.Y, padx=(0,5), pady=5)
-
+        self.lang_tree.pack(side="left", fill="both", expand=True, padx=(5,0), pady=5)
+        lang_scroll.pack(side="right", fill="y", padx=(0,5), pady=5)
         self.lang_tree.bind("<<TreeviewSelect>>", lambda e: self._trigger_filter())
 
+        # Categories / Countries lists
         self.cat_listbox = self._create_listbox_section(f, "Categories")
         self.country_listbox = self._create_listbox_section(f, "Countries")
 
-        lf_actions = ttk.Frame(f)
-        lf_actions.pack(fill=tk.X, padx=5, pady=10)
-
-        ttk.Button(lf_actions, text="Check All Streams", command=self.controller.check_all_streams).pack(fill=tk.X, pady=2)
-        ttk.Button(lf_actions, text="Remove Duplicates", command=self.controller.remove_duplicates).pack(fill=tk.X, pady=2)
-        ttk.Button(lf_actions, text="Remove Dead Streams", command=self.controller.remove_dead_streams).pack(fill=tk.X, pady=2)
-        ttk.Button(lf_actions, text="Clear Filters", command=self.clear_filters).pack(fill=tk.X, pady=2)
-        ttk.Button(lf_actions, text="Show Statistics", command=self.controller.show_statistics).pack(fill=tk.X, pady=2)
 
     def _create_listbox_section(self, parent, title):
-        lf = ttk.LabelFrame(parent, text=title)
-        lf.pack(fill=tk.X, padx=5, pady=5)
-        lb = tk.Listbox(lf, selectmode=tk.MULTIPLE, height=5, exportselection=False)
-        lb.pack(fill=tk.X, padx=5, pady=5)
+        ctk.CTkLabel(parent, text=title, font=("Inter", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 0))
+        frame = ctk.CTkFrame(parent, corner_radius=8, fg_color=("gray85", "#282a2e"))
+        frame.pack(fill="x", padx=5, pady=5)
+
+        lb = tk.Listbox(frame, selectmode=tk.MULTIPLE, height=5, exportselection=False, bg="#282a2e", fg="#e2e2e8", selectbackground="#4d8eff", borderwidth=0, highlightthickness=0)
+        lb.pack(fill="x", padx=5, pady=5)
         lb.bind('<<ListboxSelect>>', lambda e: self._trigger_filter())
         return lb
 
@@ -120,7 +129,7 @@ class FilterPanel(ttk.Frame):
             self.country_listbox.insert(tk.END, display_name)
 
     def populate_presets(self, preset_names: List[str]):
-        self.preset_combo['values'] = preset_names
+        self.preset_combo.configure(values=preset_names)
 
     def _save_preset(self):
         name = simpledialog.askstring("Save Preset", "Enter preset name:", parent=self)
@@ -128,7 +137,7 @@ class FilterPanel(ttk.Frame):
             filters = self.get_current_filters_dict()
             self.controller.save_preset(name, filters)
 
-    def _on_preset_selected(self, event=None):
+    def _on_preset_selected(self, choice=None):
         name = self.preset_combo.get()
         if name:
             preset_data = self.controller.get_preset(name)
