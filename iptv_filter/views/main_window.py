@@ -11,7 +11,7 @@ class MainWindow(tk.Tk):
         super().__init__()
         self.controller = controller
 
-        self.title("IPTV Filter Application")
+        self.title("IPTV Filter Pro")
         self.geometry("1024x768")
         self.minsize(800, 600)
 
@@ -22,43 +22,48 @@ class MainWindow(tk.Tk):
         toolbar = ttk.Frame(self)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
-        ttk.Button(toolbar, text="Load/Refresh API Data", command=self.controller.load_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(toolbar, text="Load API Data", command=self.controller.load_data).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Load M3U File", command=self.controller.load_m3u_file).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Load URL", command=self.controller.load_m3u_url).pack(side=tk.LEFT, padx=2)
 
-        ttk.Button(toolbar, text="Load M3U File", command=self.controller.load_m3u_file).pack(side=tk.LEFT, padx=5)
-        ttk.Button(toolbar, text="Load M3U URL", command=self.controller.load_m3u_url).pack(side=tk.LEFT, padx=5)
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
-        ttk.Button(toolbar, text="Export M3U", command=self.controller.export_data).pack(side=tk.LEFT, padx=5)
+        ttk.Button(toolbar, text="Update Current Playlist", command=self.controller.update_current_playlist).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Export M3U", command=self.controller.export_data).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(toolbar, text="Toggle Theme", command=self.controller.toggle_theme).pack(side=tk.RIGHT, padx=2)
 
         # Main split container
         self.paned_window = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         self.paned_window.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         # Left panel: Filters
-        filter_container = ttk.Frame(self.paned_window, width=250)
+        filter_container = ttk.Frame(self.paned_window, width=280)
         self.paned_window.add(filter_container, weight=0)
 
-        self.filter_panel = FilterPanel(filter_container, self.controller.apply_filters)
-        self.filter_panel.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.filter_panel = FilterPanel(filter_container, self.controller)
+        self.filter_panel.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
 
         # Right panel: Results
         results_container = ttk.Frame(self.paned_window)
         self.paned_window.add(results_container, weight=1)
 
-        # Channel count label
         self.count_label_var = tk.StringVar(value="0 channels loaded")
         ttk.Label(results_container, textvariable=self.count_label_var, font=("TkDefaultFont", 10, "bold")).pack(anchor=tk.W, pady=(0, 5))
 
-        # Tree
         tree_frame = ttk.Frame(results_container)
         tree_frame.pack(fill=tk.BOTH, expand=True)
-        self.channel_tree = ChannelTree(tree_frame)
+        self.channel_tree = ChannelTree(tree_frame, on_toggle_favorite=self.controller.toggle_favorite)
 
         # Status Bar
         self.status_bar = StatusBar(self)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-    def update_channel_count(self, count: int):
-        self.count_label_var.set(f"{count} channels found")
+    def update_channel_count(self, count: int, total: int = None):
+        if total is not None:
+            self.count_label_var.set(f"Showing {count} of {total} channels")
+        else:
+            self.count_label_var.set(f"{count} channels found")
 
     def ask_open_filename(self) -> str:
         return filedialog.askopenfilename(
@@ -73,6 +78,9 @@ class MainWindow(tk.Tk):
             defaultextension=".m3u",
             filetypes=[("M3U Playlist", "*.m3u"), ("All Files", "*.*")]
         )
+
+    def ask_yes_no(self, title: str, message: str) -> bool:
+        return messagebox.askyesno(title, message, parent=self)
 
     def show_error(self, title: str, message: str):
         messagebox.showerror(title, message)
