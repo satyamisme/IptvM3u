@@ -1,5 +1,6 @@
 import sys
 import threading
+import webbrowser
 from tkinter import messagebox
 import tkinter as tk
 
@@ -10,6 +11,7 @@ from iptv_filter.controllers.playlist_parser import DataProcessor
 from iptv_filter.controllers.filter_engine import FilterEngine
 from iptv_filter.controllers.export_manager import ExportManager
 from iptv_filter.controllers.preferences_manager import PreferencesManager
+from iptv_filter.utils.stream_checker import StreamChecker
 
 class AppController:
     def __init__(self):
@@ -35,18 +37,44 @@ class AppController:
         self.apply_theme(new_theme)
 
     def apply_theme(self, theme_name: str):
-        # Very basic tk styling fallback if sv_ttk is not installed.
         bg = "#1E1E1E" if theme_name == "dark" else "#FFFFFF"
         fg = "#E0E0E0" if theme_name == "dark" else "#212121"
         try:
             self.window.tk.call("tk", "windowingsystem")
-            # We can change standard tk background for main window
             self.window.configure(bg=bg)
         except:
             pass
 
     def toggle_favorite(self, channel_id: str) -> bool:
         return self.prefs.toggle_favorite(channel_id)
+
+    def preview_stream(self, channel_id: str):
+        channel = next((c for c in self.filter_engine.channels if c.id == channel_id), None)
+        if channel and channel.streams:
+            url = channel.streams[0].get("url")
+            if url:
+                try:
+                    webbrowser.open(url)
+                except Exception as e:
+                    self.window.show_error("Preview Error", str(e))
+            else:
+                self.window.show_info("Preview", "No stream URL available.")
+
+    def check_all_streams(self):
+        if not self.filter_engine.filtered_channels:
+            self.window.show_info("Check Streams", "No channels to check.")
+            return
+
+        def on_progress(current, total):
+            self.window.after(0, self.window.status_bar.update_progress, current, total, f"Checking streams: {current}/{total}")
+
+        def on_done():
+            self.window.after(0, self.window.status_bar.stop_progress, "Stream checking complete.")
+            # Trigger UI refresh
+            self.window.after(0, self.window.filter_panel._trigger_filter)
+
+        self.window.status_bar.start_indeterminate("Initializing stream check...")
+        StreamChecker.check_channels(self.filter_engine.filtered_channels, on_progress, on_done)
 
     def save_preset(self, name: str, filters: dict):
         self.prefs.save_preset(name, filters)
@@ -72,7 +100,9 @@ class AppController:
         stats = self.filter_engine.get_statistics()
         msg = f"Total Channels Loaded: {stats['total']}\n"
         msg += f"Currently Filtered: {stats['filtered']}\n"
-        msg += f"Duplicates Detected (Filtered View): {stats['duplicates_in_filtered']}\n\n"
+        msg += f"Duplicates Detected: {stats['duplicates_in_filtered']}\n"
+        msg += f"Working Streams: {stats['working_count']}\n"
+        msg += f"Dead Streams: {stats['dead_count']}\n\n"
 
         msg += "Top Languages:\n"
         for l, c in stats['top_languages']:
@@ -149,7 +179,6 @@ class AppController:
         self.window.status_bar.stop_progress("Data loaded successfully.")
 
     def apply_filters(self, filters: dict):
-        # Inject favorites list
         filters["favorites_set"] = self.prefs.favorites
 
         def worker():
