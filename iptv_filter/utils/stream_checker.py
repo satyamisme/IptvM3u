@@ -9,6 +9,24 @@ class StreamChecker:
     def check_stream(url: str, timeout: int = 5) -> Dict[str, any]:
         start = time.time()
         try:
+            # Deep check for HLS
+            if url.endswith('.m3u8'):
+                response = requests.get(url, timeout=timeout)
+                elapsed = time.time() - start
+
+                if response.status_code == 403:
+                    return {"status": "Geo-blocked", "icon": "🌐", "time": elapsed, "code": 403}
+                elif response.status_code < 400:
+                    if '#EXTM3U' in response.text:
+                        status = "Slow" if elapsed > 2.0 else "Working"
+                        icon = "⚠️" if elapsed > 2.0 else "✅"
+                        return {"status": status, "icon": icon, "time": elapsed, "code": response.status_code}
+                    else:
+                        return {"status": "Dead", "icon": "❌", "time": elapsed, "code": response.status_code}
+                else:
+                    return {"status": "Dead", "icon": "❌", "time": elapsed, "code": response.status_code}
+
+            # Standard check for others
             response = requests.head(url, timeout=timeout, allow_redirects=True)
             if response.status_code == 405:
                 response = requests.get(url, timeout=timeout, stream=True)
@@ -16,17 +34,15 @@ class StreamChecker:
 
             elapsed = time.time() - start
 
-            if response.status_code < 400:
-                status = "Working"
-                icon = "✅"
-                if elapsed > 2.0:
-                    status = "Slow"
-                    icon = "⚠️"
+            if response.status_code == 403:
+                return {"status": "Geo-blocked", "icon": "🌐", "time": elapsed, "code": 403}
+            elif response.status_code < 400:
+                status = "Slow" if elapsed > 2.0 else "Working"
+                icon = "⚠️" if elapsed > 2.0 else "✅"
+                return {"status": status, "icon": icon, "time": elapsed, "code": response.status_code}
             else:
-                status = "Dead"
-                icon = "❌"
+                return {"status": "Dead", "icon": "❌", "time": elapsed, "code": response.status_code}
 
-            return {"status": status, "icon": icon, "time": elapsed, "code": response.status_code}
         except requests.RequestException:
             return {"status": "Dead", "icon": "❌", "time": time.time() - start, "code": 0}
 
@@ -54,7 +70,7 @@ class StreamChecker:
                 futures = [executor.submit(check_and_update, ch) for ch in channels]
                 for future in as_completed(futures):
                     completed += 1
-                    if progress_callback and completed % 10 == 0:  # Update UI every 10 completions to avoid flooding the main thread
+                    if progress_callback and completed % 10 == 0:
                         progress_callback(completed, total)
 
             if progress_callback:

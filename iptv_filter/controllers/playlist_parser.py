@@ -1,5 +1,6 @@
 from typing import Dict, List, Any
 import os
+import re
 from iptv_filter.models.channel import Channel
 from iptv_filter.models.feed import Feed
 from iptv_filter.models.stream import Stream
@@ -98,7 +99,6 @@ class DataProcessor:
                 country = ""
                 categories = []
 
-                import re
                 id_match = re.search(r'tvg-id="([^"]+)"', meta)
                 if id_match:
                     ch_id = id_match.group(1)
