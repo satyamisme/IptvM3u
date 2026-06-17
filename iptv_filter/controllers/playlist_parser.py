@@ -81,6 +81,7 @@ class DataProcessor:
 
         lines = m3u_content.splitlines()
         current_channel = None
+        current_vlcopts = {}
 
         for line in lines:
             line = line.strip()
@@ -88,6 +89,7 @@ class DataProcessor:
                 continue
 
             if line.startswith("#EXTINF:"):
+                current_vlcopts = {}
                 meta = line[8:]
                 name = ""
                 if "," in meta:
@@ -119,14 +121,22 @@ class DataProcessor:
                 )
 
             elif line.startswith("#EXTVLCOPT:"):
-                pass
+                opt = line[11:].strip()
+                if opt.startswith("http-user-agent="):
+                    current_vlcopts["user_agent"] = opt[16:]
+                elif opt.startswith("http-referrer="):
+                    current_vlcopts["referrer"] = opt[14:]
             elif line.startswith("#"):
                 pass
             else:
                 if current_channel:
-                    current_channel.streams.append({"url": line})
+                    stream_obj = {"url": line}
+                    if current_vlcopts:
+                        stream_obj.update(current_vlcopts)
+                    current_channel.streams.append(stream_obj)
                     playlist.add_channel(current_channel)
                     current_channel = None
+                    current_vlcopts = {}
 
         return playlist
 

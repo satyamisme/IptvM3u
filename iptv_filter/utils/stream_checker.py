@@ -6,12 +6,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class StreamChecker:
     @staticmethod
-    def check_stream(url: str, timeout: int = 5) -> Dict[str, any]:
+    def check_stream(url: str, timeout: int = 5, headers: Dict[str, str] = None) -> Dict[str, any]:
         start = time.time()
         try:
             # Deep check for HLS
             if url.endswith('.m3u8'):
-                response = requests.get(url, timeout=timeout)
+                response = requests.get(url, timeout=timeout, headers=headers)
                 elapsed = time.time() - start
 
                 if response.status_code == 403:
@@ -27,9 +27,9 @@ class StreamChecker:
                     return {"status": "Dead", "icon": "❌", "time": elapsed, "code": response.status_code}
 
             # Standard check for others
-            response = requests.head(url, timeout=timeout, allow_redirects=True)
+            response = requests.head(url, timeout=timeout, allow_redirects=True, headers=headers)
             if response.status_code == 405:
-                response = requests.get(url, timeout=timeout, stream=True)
+                response = requests.get(url, timeout=timeout, stream=True, headers=headers)
                 response.close()
 
             elapsed = time.time() - start
@@ -55,8 +55,16 @@ class StreamChecker:
             def check_and_update(ch):
                 if ch.streams:
                     url = ch.streams[0].get("url")
+                    user_agent = ch.streams[0].get("user_agent")
+                    referrer = ch.streams[0].get("referrer")
+                    headers = {}
+                    if user_agent:
+                        headers["User-Agent"] = user_agent
+                    if referrer:
+                        headers["Referer"] = referrer
+
                     if url:
-                        res = StreamChecker.check_stream(url)
+                        res = StreamChecker.check_stream(url, headers=headers)
                         ch.status_icon = res["icon"]
                         ch.status_text = res["status"]
                     else:
