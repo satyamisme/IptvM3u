@@ -13,13 +13,13 @@ class FilterPanel(ttk.Frame):
         self.nsfw_var = tk.BooleanVar(value=False)
         self.closed_var = tk.BooleanVar(value=True)
         self.favs_only_var = tk.BooleanVar(value=False)
+        self.working_only_var = tk.BooleanVar(value=False)
 
         self.countries_mapping = {}
 
         self._setup_ui()
 
     def _setup_ui(self):
-        # Create a canvas and scrollbar for scrollable filter panel
         self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
         self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.scrollable_frame = ttk.Frame(self.canvas)
@@ -36,7 +36,6 @@ class FilterPanel(ttk.Frame):
 
         f = self.scrollable_frame
 
-        # Presets Section
         lf_presets = ttk.LabelFrame(f, text="Presets")
         lf_presets.pack(fill=tk.X, padx=5, pady=5)
 
@@ -49,7 +48,6 @@ class FilterPanel(ttk.Frame):
         ttk.Button(btn_frame, text="Save Current", command=self._save_preset).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
         ttk.Button(btn_frame, text="Load", command=self._on_preset_selected).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
 
-        # Basic Options
         lf_opts = ttk.LabelFrame(f, text="Options")
         lf_opts.pack(fill=tk.X, padx=5, pady=5)
 
@@ -58,18 +56,19 @@ class FilterPanel(ttk.Frame):
 
         ttk.Checkbutton(lf_opts, text="Show NSFW", variable=self.nsfw_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
         ttk.Checkbutton(lf_opts, text="Exclude Closed", variable=self.closed_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
-        ttk.Checkbutton(lf_opts, text="Favorites Only", variable=self.favs_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5, pady=(0, 5))
+        ttk.Checkbutton(lf_opts, text="Favorites Only", variable=self.favs_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
+        ttk.Checkbutton(lf_opts, text="Working Only", variable=self.working_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5, pady=(0, 5))
 
-        # Lists
         self.lang_listbox = self._create_listbox_section(f, "Languages")
         self.cat_listbox = self._create_listbox_section(f, "Categories")
         self.country_listbox = self._create_listbox_section(f, "Countries")
 
-        # Actions
         lf_actions = ttk.Frame(f)
         lf_actions.pack(fill=tk.X, padx=5, pady=10)
-        ttk.Button(lf_actions, text="Clear Filters", command=self.clear_filters).pack(fill=tk.X, pady=2)
+
+        ttk.Button(lf_actions, text="Check All Streams", command=self.controller.check_all_streams).pack(fill=tk.X, pady=2)
         ttk.Button(lf_actions, text="Remove Duplicates", command=self.controller.remove_duplicates).pack(fill=tk.X, pady=2)
+        ttk.Button(lf_actions, text="Clear Filters", command=self.clear_filters).pack(fill=tk.X, pady=2)
         ttk.Button(lf_actions, text="Show Statistics", command=self.controller.show_statistics).pack(fill=tk.X, pady=2)
 
     def _create_listbox_section(self, parent, title):
@@ -119,6 +118,7 @@ class FilterPanel(ttk.Frame):
         self.nsfw_var.set(data.get("nsfw", False))
         self.closed_var.set(data.get("exclude_closed", True))
         self.favs_only_var.set(data.get("favorites_only", False))
+        self.working_only_var.set(data.get("working_only", False))
         self.search_var.set(data.get("search_term", ""))
 
         langs = data.get("languages", [])
@@ -152,6 +152,7 @@ class FilterPanel(ttk.Frame):
             "nsfw": self.nsfw_var.get(),
             "exclude_closed": self.closed_var.get(),
             "favorites_only": self.favs_only_var.get(),
+            "working_only": self.working_only_var.get(),
             "languages": self.get_selected_items(self.lang_listbox),
             "categories": self.get_selected_items(self.cat_listbox),
             "countries": selected_countries
@@ -166,6 +167,7 @@ class FilterPanel(ttk.Frame):
         self.nsfw_var.set(False)
         self.closed_var.set(True)
         self.favs_only_var.set(False)
+        self.working_only_var.set(False)
         self.lang_listbox.selection_clear(0, tk.END)
         self.cat_listbox.selection_clear(0, tk.END)
         self.country_listbox.selection_clear(0, tk.END)

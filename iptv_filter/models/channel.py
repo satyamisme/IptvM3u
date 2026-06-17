@@ -19,3 +19,7 @@ class Channel:
     # Internal fields for combined display and easier filtering
     streams: List[dict] = field(default_factory=list)
     languages: List[str] = field(default_factory=list)
+
+    # Status fields
+    status_icon: str = "❓"
+    status_text: str = "Unknown"

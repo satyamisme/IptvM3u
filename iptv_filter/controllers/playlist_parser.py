@@ -7,12 +7,23 @@ from iptv_filter.models.playlist import Playlist
 import requests
 
 class DataProcessor:
+    def __init__(self):
+        self.language_map = {}
+
     def process_data(self, api_data: Dict[str, Any]) -> Playlist:
         playlist = Playlist()
 
         raw_channels = api_data.get("channels", [])
         raw_feeds = api_data.get("feeds", [])
         raw_streams = api_data.get("streams", [])
+        raw_languages = api_data.get("languages", [])
+
+        # Build language lookup
+        for l in raw_languages:
+            code = l.get("code")
+            name = l.get("name")
+            if code and name:
+                self.language_map[code] = name
 
         streams_by_channel = {}
         for s in raw_streams:
@@ -52,7 +63,9 @@ class DataProcessor:
             langs = set()
             for f in channel_feeds:
                 for l in f.get("languages", []):
-                    langs.add(l)
+                    # Store display name if possible, fallback to code
+                    display_lang = self.language_map.get(l, l)
+                    langs.add(display_lang)
             channel.languages = list(langs)
 
             playlist.add_channel(channel)
@@ -71,8 +84,6 @@ class DataProcessor:
                 continue
 
             if line.startswith("#EXTINF:"):
-                # Basic parsing for MVP
-                # #EXTINF:-1 tvg-id="id" tvg-country="country" group-title="cat",Name
                 meta = line[8:]
                 name = ""
                 if "," in meta:
@@ -81,11 +92,9 @@ class DataProcessor:
                     name = meta_parts[1].strip()
 
                 ch_id = f"m3u_{len(playlist.channels)}"
-                # Attempt to extract id, country, group-title
                 country = ""
                 categories = []
 
-                # Super basic attribute extraction
                 import re
                 id_match = re.search(r'tvg-id="([^"]+)"', meta)
                 if id_match:
@@ -107,12 +116,10 @@ class DataProcessor:
                 )
 
             elif line.startswith("#EXTVLCOPT:"):
-                # Skip or parse options like referer
                 pass
             elif line.startswith("#"):
                 pass
             else:
-                # URL
                 if current_channel:
                     current_channel.streams.append({"url": line})
                     playlist.add_channel(current_channel)
