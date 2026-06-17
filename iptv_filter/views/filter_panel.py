@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, simpledialog, messagebox
 from typing import List, Callable, Dict
+from iptv_filter.utils.language_groups import get_language_group
 
 class FilterPanel(ttk.Frame):
     def __init__(self, parent, controller):
@@ -59,7 +60,20 @@ class FilterPanel(ttk.Frame):
         ttk.Checkbutton(lf_opts, text="Favorites Only", variable=self.favs_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5)
         ttk.Checkbutton(lf_opts, text="Working Only", variable=self.working_only_var, command=self._trigger_filter).pack(anchor=tk.W, padx=5, pady=(0, 5))
 
-        self.lang_listbox = self._create_listbox_section(f, "Languages")
+        # Enhanced Language Treeview
+        lf_lang = ttk.LabelFrame(f, text="Languages")
+        lf_lang.pack(fill=tk.X, padx=5, pady=5)
+
+        # We'll use a treeview to show groups and languages
+        self.lang_tree = ttk.Treeview(lf_lang, selectmode="extended", show="tree", height=6)
+        lang_scroll = ttk.Scrollbar(lf_lang, orient="vertical", command=self.lang_tree.yview)
+        self.lang_tree.configure(yscrollcommand=lang_scroll.set)
+
+        self.lang_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5,0), pady=5)
+        lang_scroll.pack(side=tk.RIGHT, fill=tk.Y, padx=(0,5), pady=5)
+
+        self.lang_tree.bind("<<TreeviewSelect>>", lambda e: self._trigger_filter())
+
         self.cat_listbox = self._create_listbox_section(f, "Categories")
         self.country_listbox = self._create_listbox_section(f, "Countries")
 
@@ -80,9 +94,21 @@ class FilterPanel(ttk.Frame):
         return lb
 
     def populate_lists(self, languages: List[str], categories: List[str], countries_counts: Dict[str, int]):
-        self.lang_listbox.delete(0, tk.END)
-        for lang in sorted(languages):
-            self.lang_listbox.insert(tk.END, lang)
+        # Populate languages into tree
+        self.lang_tree.delete(*self.lang_tree.get_children())
+
+        # Group them
+        groups = {}
+        for display_name in languages:
+            # We need the code to get the group
+            code = self.controller.data_processor.language_code_map.get(display_name, display_name)
+            group_name = get_language_group(code)
+            groups.setdefault(group_name, []).append(display_name)
+
+        for g_name in sorted(groups.keys()):
+            gid = self.lang_tree.insert("", "end", text=g_name, open=False)
+            for lang in sorted(groups[g_name]):
+                self.lang_tree.insert(gid, "end", text=lang, values=(lang,))
 
         self.cat_listbox.delete(0, tk.END)
         for cat in sorted(categories):
@@ -121,10 +147,15 @@ class FilterPanel(ttk.Frame):
         self.working_only_var.set(data.get("working_only", False))
         self.search_var.set(data.get("search_term", ""))
 
+        # Restoring tree selection can be complex if node is closed, we do basic selection
         langs = data.get("languages", [])
-        for i in range(self.lang_listbox.size()):
-            if self.lang_listbox.get(i) in langs:
-                self.lang_listbox.selection_set(i)
+        to_select = []
+        for item in self.lang_tree.get_children():
+            for child in self.lang_tree.get_children(item):
+                vals = self.lang_tree.item(child, "values")
+                if vals and vals[0] in langs:
+                    to_select.append(child)
+        self.lang_tree.selection_set(to_select)
 
         cats = data.get("categories", [])
         for i in range(self.cat_listbox.size()):
@@ -147,13 +178,29 @@ class FilterPanel(ttk.Frame):
         selected_countries_display = self.get_selected_items(self.country_listbox)
         selected_countries = [self.countries_mapping[d] for d in selected_countries_display if d in self.countries_mapping]
 
+        # Gather languages from tree
+        selected_langs = []
+        for item in self.lang_tree.selection():
+            vals = self.lang_tree.item(item, "values")
+            if vals:
+                selected_langs.append(vals[0])
+            else:
+                # If a group is selected, select all its children
+                for child in self.lang_tree.get_children(item):
+                    child_vals = self.lang_tree.item(child, "values")
+                    if child_vals:
+                        selected_langs.append(child_vals[0])
+
+        # Remove duplicates from group selecting
+        selected_langs = list(set(selected_langs))
+
         return {
             "search_term": self.search_var.get(),
             "nsfw": self.nsfw_var.get(),
             "exclude_closed": self.closed_var.get(),
             "favorites_only": self.favs_only_var.get(),
             "working_only": self.working_only_var.get(),
-            "languages": self.get_selected_items(self.lang_listbox),
+            "languages": selected_langs,
             "categories": self.get_selected_items(self.cat_listbox),
             "countries": selected_countries
         }
@@ -168,7 +215,7 @@ class FilterPanel(ttk.Frame):
         self.closed_var.set(True)
         self.favs_only_var.set(False)
         self.working_only_var.set(False)
-        self.lang_listbox.selection_clear(0, tk.END)
+        self.lang_tree.selection_remove(self.lang_tree.selection())
         self.cat_listbox.selection_clear(0, tk.END)
         self.country_listbox.selection_clear(0, tk.END)
         self.preset_combo.set("")

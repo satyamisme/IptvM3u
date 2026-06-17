@@ -24,7 +24,6 @@ class AppController:
         self.window = MainWindow(self)
         self.apply_theme(self.prefs.get_setting("theme", "light"))
 
-        # Load initial data on startup
         self.window.after(100, self.load_data)
 
     def run(self):
@@ -70,7 +69,6 @@ class AppController:
 
         def on_done():
             self.window.after(0, self.window.status_bar.stop_progress, "Stream checking complete.")
-            # Trigger UI refresh
             self.window.after(0, self.window.filter_panel._trigger_filter)
 
         self.window.status_bar.start_indeterminate("Initializing stream check...")
@@ -115,15 +113,12 @@ class AppController:
         self.window.show_info("Channel Statistics", msg)
 
     def load_data(self):
+        self.window.status_bar.start_indeterminate("Fetching and processing API data...")
         def worker():
             try:
-                self.window.status_bar.start_indeterminate("Fetching and processing API data...")
-
                 api_data = self.api_client.fetch_all()
                 playlist = self.data_processor.process_data(api_data)
-
                 self.filter_engine.load_channels(playlist.channels)
-
                 self.window.after(0, self._on_data_loaded)
             except Exception as e:
                 self.window.after(0, self.window.show_error, "Error loading API data", str(e))
@@ -137,10 +132,10 @@ class AppController:
             return
 
         self.prefs.set_setting("last_loaded_file", filepath)
+        self.window.status_bar.start_indeterminate("Loading M3U file...")
 
         def worker():
             try:
-                self.window.status_bar.start_indeterminate("Loading M3U file...")
                 playlist = self.data_processor.load_m3u_file(filepath)
                 self.filter_engine.load_channels(playlist.channels)
                 self.window.after(0, self._on_data_loaded)
@@ -155,9 +150,9 @@ class AppController:
         if not url:
             return
 
+        self.window.status_bar.start_indeterminate("Downloading M3U...")
         def worker():
             try:
-                self.window.status_bar.start_indeterminate("Downloading M3U...")
                 playlist = self.data_processor.load_m3u_url(url)
                 self.filter_engine.load_channels(playlist.channels)
                 self.window.after(0, self._on_data_loaded)
@@ -180,11 +175,10 @@ class AppController:
 
     def apply_filters(self, filters: dict):
         filters["favorites_set"] = self.prefs.favorites
+        self.window.status_bar.start_indeterminate("Applying filters...")
 
         def worker():
-            self.window.status_bar.start_indeterminate("Applying filters...")
             filtered = self.filter_engine.apply_filters(**filters)
-
             self.window.after(0, self._update_tree, filtered)
 
         threading.Thread(target=worker, daemon=True).start()

@@ -53,7 +53,11 @@ class MainWindow(tk.Tk):
 
         tree_frame = ttk.Frame(results_container)
         tree_frame.pack(fill=tk.BOTH, expand=True)
-        self.channel_tree = ChannelTree(tree_frame, on_toggle_favorite=self.controller.toggle_favorite)
+        self.channel_tree = ChannelTree(
+            tree_frame,
+            on_toggle_favorite=self.controller.toggle_favorite,
+            on_preview_stream=self.controller.preview_stream
+        )
 
         # Status Bar
         self.status_bar = StatusBar(self)

@@ -4,11 +4,13 @@ from iptv_filter.models.channel import Channel
 from iptv_filter.models.feed import Feed
 from iptv_filter.models.stream import Stream
 from iptv_filter.models.playlist import Playlist
+from iptv_filter.utils.language_groups import get_language_group
 import requests
 
 class DataProcessor:
     def __init__(self):
         self.language_map = {}
+        self.language_code_map = {}
 
     def process_data(self, api_data: Dict[str, Any]) -> Playlist:
         playlist = Playlist()
@@ -24,6 +26,7 @@ class DataProcessor:
             name = l.get("name")
             if code and name:
                 self.language_map[code] = name
+                self.language_code_map[name] = code
 
         streams_by_channel = {}
         for s in raw_streams:
@@ -63,7 +66,7 @@ class DataProcessor:
             langs = set()
             for f in channel_feeds:
                 for l in f.get("languages", []):
-                    # Store display name if possible, fallback to code
+                    # Store original code for filtering, and map to display string
                     display_lang = self.language_map.get(l, l)
                     langs.add(display_lang)
             channel.languages = list(langs)
